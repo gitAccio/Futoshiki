@@ -1,0 +1,30 @@
+# === FILE DI SISTEMA ===
+.DS_Store          # macOS
+Thumbs.db          # Windows
+
+# === FILE DI EDITOR ===
+.vscode/           # VS Code settings
+.idea/             # JetBrains IDEs (PyCharm, WebStorm, etc.)
+*.code-workspace
+*.swp              # Vim swap files
+*.swo
+*~
+
+# === FILE DI LOG / CACHE ===
+*.log
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+
+# === FILE AMBIENTALI ===
+.env
+.env.*
+.env.local
+
+# === FILE DI COSTRUZIONE (NODE o PYTHON, se usi tool) ===
+node_modules/
+dist/
+build/
+
