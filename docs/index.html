@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Futoshiki Solver</title>
+  <style>
+    body {
+      font-family: 'Courier New', Courier, monospace; /* Font macchina da scrivere */
+      font-size: 14px; /* Riduci qui la dimensione del font globale */
+      line-height: 1.5;
+      text-align: center;
+      padding: 2rem;
+      background-color: #e0e0e0;
+    }
+    table {
+      border-collapse: separate;
+      border-spacing: 8px 4px;
+      margin: 1rem auto;
+    }
+    td {
+      width: 50px;
+      height: 50px;
+      text-align: center;
+      vertical-align: middle;
+      position: relative;
+    }
+    input.cell,
+    input.constraint {
+      box-sizing: border-box;
+      width: 50px;
+      height: 50px;
+      padding: 0;
+      margin: 0;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: normal;
+      border: 1px solid #000000;
+      cursor: pointer;
+      background-color: #ffffff;
+      user-select: none;
+    }
+    input.constraint {
+      background-color: #ffe5e5;
+      cursor: pointer;
+    }
+    input.cell {
+      cursor: text;
+    }
+    button {
+      margin-top: 1rem;
+      margin-left: 0.5rem;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #history button {
+      display: inline-block;
+      margin: 0.2rem;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>FUTOSHIKI  5x5</h1>
+   <p>Solutore dell'enigma Futoshiki de "La Settimana Enigmistica".</p>
+   <p><strong>Utilizzo e Regole:</strong></p>
+   <ul style="text-align: left; max-width: 508px; margin: 0 auto 1rem auto; padding-left: 1.2rem;">
+     <li>Compila manualmente le celle con i numeri.</li>
+     <li>Premi i bottoni rossi per aggiungere i vincoli.</li>
+     <li>Ogni numero dovrà comparire una sola volta per riga e per colonna.</li>
+     <li>I simboli &lt;, &gt;, ∧ e ∨ rappresentano i vincoli tra le celle adiacenti.</li>
+   </ul>
+
+  <table id="grid"></table>
+
+  <div>
+    <button onclick="solve()">Risolvere</button>
+    <button onclick="resetGrid()">Reset</button>
+  </div>
+
+  <div id="history"></div>
+
+  <script>
+    const size = 5;
+    let history = [];
+
+    function creaGriglia() {
+      const grid = document.getElementById("grid");
+      for (let r = 0; r < size * 2 - 1; r++) {
+        const row = document.createElement("tr");
+        for (let c = 0; c < size * 2 - 1; c++) {
+          const cell = document.createElement("td");
+          if (r % 2 === 0 && c % 2 === 0) {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.maxLength = 1;
+            input.className = "cell";
+            input.dataset.row = Math.floor(r / 2);
+            input.dataset.col = Math.floor(c / 2);
+            cell.appendChild(input);
+          } else if ((r % 2 === 0 && c % 2 === 1) || (r % 2 === 1 && c % 2 === 0)) {
+            const btn = document.createElement("input");
+            btn.type = "button";
+            btn.value = "";
+            btn.className = "constraint";
+
+            const isHorizontal = r % 2 === 0;
+            const sequence = isHorizontal ? ["", "<", ">"] : ["", "∧", "∨"];
+
+            btn.dataset.index = 0;
+            btn.addEventListener("click", () => {
+              let idx = parseInt(btn.dataset.index);
+              idx = (idx + 1) % sequence.length;
+              btn.dataset.index = idx;
+              btn.value = sequence[idx];
+            });
+
+            cell.appendChild(btn);
+          }
+          row.appendChild(cell);
+        }
+        grid.appendChild(row);
+      }
+    }
+
+    function leggiInput() {
+      const values = [];
+      const constraints = [];
+      const state = [];
+
+      const rows = document.querySelectorAll("#grid tr");
+      rows.forEach((tr, r) => {
+        const cells = tr.querySelectorAll("td");
+        const row = [];
+        const stateRow = [];
+        cells.forEach((td, c) => {
+          const input = td.querySelector("input");
+          if (!input) return;
+          const ch = input.value.trim();
+
+          if (r % 2 === 0 && c % 2 === 0) {
+            const val = parseInt(ch);
+            row.push(isNaN(val) ? null : val);
+            stateRow.push(input.value);
+          } else {
+            stateRow.push(input.value);
+            if (ch === "<" || ch === ">" || ch === "∨" || ch === "∧") {
+              const r1 = Math.floor(r / 2);
+              const c1 = Math.floor(c / 2);
+              if (ch === "<") constraints.push([r1, c1, "<", r1, c1 + 1]);
+              else if (ch === ">") constraints.push([r1, c1, ">", r1, c1 + 1]);
+              else if (ch === "∧") constraints.push([r1, c1, "<", r1 + 1, c1]);
+              else if (ch === "∨") constraints.push([r1, c1, ">", r1 + 1, c1]);
+            }
+          }
+        });
+        if (row.length > 0) values.push(row);
+        if (stateRow.length > 0) state.push(stateRow);
+      });
+
+      return [values, constraints, state];
+    }
+
+    function solve() {
+      const [grid, constraints, state] = leggiInput();
+      salvaCronologia(state);
+
+      function isValid(r, c, num) {
+        for (let i = 0; i < size; i++) {
+          if (grid[r][i] === num || grid[i][c] === num) return false;
+        }
+        for (const [r1, c1, op, r2, c2] of constraints) {
+          let val1 = grid[r1][c1];
+          let val2 = grid[r2][c2];
+          if (r1 === r && c1 === c) val1 = num;
+          if (r2 === r && c2 === c) val2 = num;
+          if (val1 !== null && val2 !== null) {
+            if (op === "<" && !(val1 < val2)) return false;
+            if (op === ">" && !(val1 > val2)) return false;
+          }
+        }
+        return true;
+      }
+
+      function backtrack(r = 0, c = 0) {
+        if (r === size) return true;
+        const nextR = c === size - 1 ? r + 1 : r;
+        const nextC = (c + 1) % size;
+
+        if (grid[r][c] !== null) return backtrack(nextR, nextC);
+
+        for (let num = 1; num <= size; num++) {
+          if (isValid(r, c, num)) {
+            grid[r][c] = num;
+            if (backtrack(nextR, nextC)) return true;
+            grid[r][c] = null;
+          }
+        }
+        return false;
+      }
+
+      if (backtrack()) {
+        const inputs = document.querySelectorAll("input.cell");
+        inputs.forEach((input) => {
+          const r = parseInt(input.dataset.row);
+          const c = parseInt(input.dataset.col);
+          input.value = grid[r][c];
+          input.style.backgroundColor = "#d4ffd4";
+        });
+      } else {
+        alert("Nessuna soluzione trovata.");
+      }
+    }
+
+    function salvaCronologia(state) {
+      history.push(state);
+      const hDiv = document.getElementById("history");
+      const btn = document.createElement("button");
+      btn.textContent = `Ripristina input #${history.length}`;
+      btn.onclick = () => ripristinaStato(state);
+      hDiv.appendChild(btn);
+    }
+
+    function ripristinaStato(state) {
+      const rows = document.querySelectorAll("#grid tr");
+      rows.forEach((tr, r) => {
+        const cells = tr.querySelectorAll("td");
+        cells.forEach((td, c) => {
+          const input = td.querySelector("input");
+          if (input && state[r] && state[r][c] !== undefined) {
+            input.value = state[r][c];
+            if (input.classList.contains("cell") && state[r][c] === "") {
+              input.style.backgroundColor = "#ffffff";
+            }
+          }
+        });
+      });
+    }
+
+    function resetGrid() {
+      const inputs = document.querySelectorAll("input.cell");
+      inputs.forEach((input) => {
+        input.value = "";
+      });
+    }
+
+    creaGriglia();
+  </script>
+  <footer style="text-align: center; margin-top: 2em;">
+  <p>
+    Codice sorgente disponibile su 
+    <a href="https://github.com/gitAccio/Futoshiki" target="_blank">
+      GitHub
+    </a>
+  </p>
+</footer>
+</body>
+</html>
